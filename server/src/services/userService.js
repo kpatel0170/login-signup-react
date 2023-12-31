@@ -1,18 +1,26 @@
-import User from "../models/user.js";
 import ApiError from "../utils/ApiError.js";
 import { HTTP_CODES, AUTH_MESSAGES } from "../config/constants.js";
+import UserRepository from "../repositories/mongo/user-repo.js";
 
 class UserService {
+  constructor() {
+    this.userRepository = new UserRepository();
+  }
+
   /**
    * Create a user
    * @param {Object} userBody
    * @returns {Promise<User>}
    */
   async createUser(userBody) {
-    if (await User.isEmailTaken(userBody.email)) {
+    const existingUser = await this.userRepository.getUserByEmail(
+      userBody.email
+    );
+    if (existingUser) {
       throw new ApiError(HTTP_CODES.BAD_REQUEST, AUTH_MESSAGES.EXISTS_EMAIL);
     }
-    return User.create(userBody);
+
+    return this.userRepository.createUser(userBody);
   }
 
   /**
@@ -20,7 +28,7 @@ class UserService {
    * @returns {Promise<User[]>}
    */
   async getAllUsers() {
-    return User.find();
+    return this.userRepository.getAllUsers();
   }
 
   /**
@@ -30,7 +38,7 @@ class UserService {
    * @returns {Promise<QueryResult>}
    */
   async queryUsers(filter, options) {
-    const users = await User.paginate(filter, options);
+    const users = await this.userRepository.queryUsers(filter, options);
     return users;
   }
 
@@ -40,7 +48,7 @@ class UserService {
    * @returns {Promise<User>}
    */
   async getUserById(id) {
-    return User.findOne({ _id: id }).exec();
+    return this.userRepository.getUserById(id);
   }
 
   /**
@@ -49,7 +57,7 @@ class UserService {
    * @returns {Promise<User>}
    */
   async getUserByEmail(email) {
-    return User.findOne({ email }).exec();
+    return this.userRepository.getUserByEmail(email);
   }
 
   /**
@@ -59,19 +67,18 @@ class UserService {
    * @returns {Promise<User>}
    */
   async updateUserById(userId, updateBody) {
-    const user = await this.getUserById(userId);
+    const user = await this.userRepository.getUserById(userId);
     if (!user) {
       throw new ApiError(HTTP_CODES.NOT_FOUND, AUTH_MESSAGES.USER_NOT_FOUND);
     }
-    if (
-      updateBody.email &&
-      (await User.isEmailTaken(updateBody.email, userId))
-    ) {
+    const existingUser = await this.userRepository.getUserByEmail(
+      updateBody.email
+    );
+    if (existingUser && existingUser._id.toString() !== userId) {
       throw new ApiError(HTTP_CODES.BAD_REQUEST, AUTH_MESSAGES.EMAIL_EXISTS);
     }
-    Object.assign(user, updateBody);
-    await user.save();
-    return user;
+    await this.userRepository.updateUserById(userId, updateBody);
+    return this.userRepository.getUserById(userId);
   }
 
   /**
@@ -80,11 +87,11 @@ class UserService {
    * @returns {Promise<User>}
    */
   async deleteUserById(userId) {
-    const user = await this.getUserById(userId);
+    const user = await this.userRepository.getUserById(userId);
     if (!user) {
       throw new ApiError(HTTP_CODES.NOT_FOUND, AUTH_MESSAGES.USER_NOT_FOUND);
     }
-    await user.remove();
+    await this.userRepository.deleteUserById(userId);
     return user;
   }
 }
