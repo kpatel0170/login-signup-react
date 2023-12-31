@@ -4,10 +4,12 @@ import Token from "../models/token.js";
 import ApiError from "../utils/ApiError.js";
 import { HTTP_CODES, AUTH_MESSAGES } from "../config/constants.js";
 
-const userService = new UserService();
-const tokenService = new TokenService();
-
 class AuthService {
+  constructor() {
+    this.userService = new UserService();
+    this.tokenService = new TokenService();
+  }
+
   /**
    * Login with username and password
    * @param {string} email
@@ -15,7 +17,8 @@ class AuthService {
    * @returns {Promise<User>}
    */
   async loginUserWithEmailAndPassword(email, password) {
-    const user = await userService.getUserByEmail(email);
+    const user = await this.userService.getUserByEmail(email);
+
     if (!user || !(await user.isPasswordMatch(password))) {
       throw new ApiError(
         HTTP_CODES.UNAUTHORIZED,
@@ -49,16 +52,16 @@ class AuthService {
    */
   async refreshAuth(refreshToken) {
     try {
-      const refreshTokenDoc = await tokenService.verifyToken(
+      const refreshTokenDoc = await this.tokenService.verifyToken(
         refreshToken,
         "refreshToken"
       );
-      const user = await userService.getUserById(refreshTokenDoc.user);
+      const user = await this.userService.getUserById(refreshTokenDoc.user);
       if (!user) {
         throw new Error();
       }
       await Token.deleteOne({ _id: refreshTokenDoc._id });
-      return tokenService.generateAuthTokens(user);
+      return this.tokenService.generateAuthTokens(user);
     } catch (error) {
       throw new ApiError(
         HTTP_CODES.UNAUTHORIZED,
@@ -75,15 +78,17 @@ class AuthService {
    */
   async resetPassword(resetPasswordToken, newPassword) {
     try {
-      const resetPasswordTokenDoc = await tokenService.verifyToken(
+      const resetPasswordTokenDoc = await this.tokenService.verifyToken(
         resetPasswordToken,
         "resetPasswordToken"
       );
-      const user = await userService.getUserById(resetPasswordTokenDoc.user);
+      const user = await this.userService.getUserById(
+        resetPasswordTokenDoc.user
+      );
       if (!user) {
         throw new Error();
       }
-      await userService.updateUserById(user.id, { password: newPassword });
+      await this.userService.updateUserById(user.id, { password: newPassword });
       await Token.deleteMany({ user: user.id, type: "resetPasswordToken" });
     } catch (error) {
       throw new ApiError(HTTP_CODES.UNAUTHORIZED, "Password reset failed");
@@ -97,16 +102,16 @@ class AuthService {
    */
   async verifyEmail(verifyEmailToken) {
     try {
-      const verifyEmailTokenDoc = await tokenService.verifyToken(
+      const verifyEmailTokenDoc = await this.tokenService.verifyToken(
         verifyEmailToken,
         "verifyEmailToken"
       );
-      const user = await userService.getUserById(verifyEmailTokenDoc.user);
+      const user = await this.userService.getUserById(verifyEmailTokenDoc.user);
       if (!user) {
         throw new Error();
       }
       await Token.deleteMany({ user: user.id, type: "verifyEmailToken" });
-      await userService.updateUserById(user.id, { isEmailVerified: true });
+      await this.userService.updateUserById(user.id, { isEmailVerified: true });
     } catch (error) {
       throw new ApiError(HTTP_CODES.UNAUTHORIZED, "Email verification failed");
     }

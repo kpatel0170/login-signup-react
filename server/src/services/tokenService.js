@@ -2,14 +2,17 @@ import jwt from "jsonwebtoken";
 import moment from "moment-timezone";
 import config from "../config/config.js";
 import UserService from "./userService.js";
-import Token from "../models/token.js";
 import ApiError from "../utils/ApiError.js";
-// eslint-disable-next-line
-import enums from "../json/enums.json" assert { type: "json" };
+import { HTTP_CODES } from "../config/constants.js";
+import TokenRepository from "../repositories/mongo/token-repo.js";
 
 const userService = new UserService();
 
 class TokenService {
+  constructor() {
+    this.tokenRepository = new TokenRepository();
+  }
+
   /**
    * Generate a JWT token
    * @param {ObjectId} userId - User ID for whom the token is being generated
@@ -38,13 +41,14 @@ class TokenService {
    * @returns {Promise<Token>} - Saved token document
    */
   async saveToken(token, userId, expires, type, blacklisted = false) {
-    const tokenDoc = await Token.create({
+    const tokenDoc = {
       token,
       user: userId,
       expires: expires.toDate(),
       type,
       blacklisted
-    });
+    };
+    await this.tokenRepository.saveToken(tokenDoc);
     return tokenDoc;
   }
 
@@ -56,12 +60,12 @@ class TokenService {
    */
   async verifyToken(token, type) {
     const payload = jwt.verify(token, config.jwt.secret);
-    const tokenDoc = await Token.findOne({
+    const tokenDoc = await this.tokenRepository.getToken(
       token,
       type,
-      user: payload.sub,
-      blacklisted: false
-    });
+      payload.sub
+    );
+
     if (!tokenDoc) {
       throw new Error("Token not found");
     }
@@ -111,7 +115,7 @@ class TokenService {
     const user = await userService.getUserByEmail(email);
     if (!user) {
       throw new ApiError(
-        enums.HTTP_CODES.NOT_FOUND,
+        HTTP_CODES.NOT_FOUND,
         "No users found with this email"
       );
     }
